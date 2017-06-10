@@ -1,0 +1,77 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: rancher
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: rancher
+    spec:
+      containers:
+        - image: rancher/server
+          name: rancher-server
+          args:
+            - --db-host
+            - $(RANCHER_DB_HOST)
+            - --db-port
+            - $(RANCHER_DB_PORT)
+            - --db-user
+            - $(RANCHER_DB_USER)
+            - --db-pass
+            - $(RANCHER_DB_PASS)
+          env:
+            - name: RANCHER_DB_HOST
+              value: 127.0.0.1
+            - name: RANCHER_DB_PORT
+              value: "3306"
+            - name: RANCHER_DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: cloudsql-db-credentials
+                  key: password
+            - name: RANCHER_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: cloudsql-db-credentials
+                  key: username
+          ports:
+            - containerPort: 8080
+              name: rancher
+            - containerPort: 8081
+              name: rancher-api
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 180
+            timeoutSeconds: 30
+        - image: gcr.io/cloudsql-docker/gce-proxy:1.09
+          name: cloudsql-proxy
+          env:
+            - name: RANCHER_DB_HOST
+              value: moocow:us-central1:livestock-1
+            - name: RANCHER_DB_PORT
+              value: "3306"
+          command: ["/cloud_sql_proxy", "--dir=/cloudsql",
+                    "-instances=$(RANCHER_DB_HOST)=tcp:$(RANCHER_DB_PORT)",
+                    "-credential_file=/secrets/cloudsql/credentials.json"]
+          volumeMounts:
+            - name: cloudsql-instance-credentials
+              mountPath: /secrets/cloudsql
+              readOnly: true
+            - name: ssl-certs
+              mountPath: /etc/ssl/certs
+            - name: cloudsql
+              mountPath: /cloudsql
+      volumes:
+        - name: cloudsql-instance-credentials
+          secret:
+            secretName: cloudsql-instance-credentials
+        - name: ssl-certs
+          hostPath:
+            path: /etc/ssl/certs
+        - name: cloudsql
+          emptyDir:

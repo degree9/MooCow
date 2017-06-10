@@ -1,0 +1,12 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: rancher-ingress
+  labels:
+    app: rancher
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+spec:
+  backend:
+    serviceName: rancher
+    servicePort: 80
